@@ -1,26 +1,28 @@
 ﻿using Discord.Bot.Handler;
+using Discord.Bot.Handlers;
+using Discord.Bot.Logger;
+using Discord.Rest;
 using Discord.WebSocket;
-using System;
-using System.Threading.Tasks;
+using ILogger = Discord.Bot.Logger.ILogger;
 
 namespace Discord.Bot
 {
 	public class Bot : IBotEvents
 	{
-		public static Bot Instance
+		public static Bot Instance { get; private set; }
+
+		public static Func<IDiscordClient, IUserMessage, CommandContext> ContextBuilder
 		{
-			get
-			{
-				if (_instance == null)
-				{
-
-				}
-
-				return _instance;
-			}
+			get => _contextBuilder;
+			set => _contextBuilder = value ?? defaultContextBuilder;
 		}
 
-		private static Bot _instance;
+		private static Func<IDiscordClient, IUserMessage, CommandContext> _contextBuilder = defaultContextBuilder!;
+
+		private static readonly Func<IDiscordClient, IUserMessage, CommandContext> defaultContextBuilder
+			= (client, message) => new CommandContext(client, message);
+
+		public virtual ILogger Log { get; } = new DiscordLogger();
 
 		public enum ActiveState
 		{
@@ -28,12 +30,13 @@ namespace Discord.Bot
 			Paused,
 			Ready,
 			Updating,
-			Exiting
+			Exiting,
+			Exited
 		}
 
-		public ulong ClientUserId { get; }
+		public ulong ClientUserId { get; private set; }
 
-		public ulong OwnerId;
+		public ulong OwnerId { get; private set; }
 
 		public ActiveState CurrentState { get; private set; }
 
@@ -56,6 +59,8 @@ namespace Discord.Bot
 			Client.ReactionRemoved += OnReactionRemoved;
 
 			Client.Disconnected += OnDisconnected;
+
+			Instance = this;
 		}
 
 		public virtual async Task Start(string token)
@@ -64,11 +69,19 @@ namespace Discord.Bot
 			await Client.StartAsync();
 
 			SetCommandHandler();
+
+			await Task.Delay(-1);
 		}
 
+#pragma warning disable CS1998
 		public virtual async Task Ready()
 		{
 			CurrentState = ActiveState.Ready;
+
+			ClientUserId = Client.CurrentUser.Id;
+
+			RestApplication? info = await Client.GetApplicationInfoAsync();
+			OwnerId = info.Owner.Id;
 		}
 
 		private void SetCommandHandler()
@@ -87,7 +100,6 @@ namespace Discord.Bot
 		{
 		
 		}
-
 
 		public virtual async Task OnJoinedGuild(SocketGuild guildJoined) 
 		{
@@ -110,5 +122,7 @@ namespace Discord.Bot
 		{
 
 		}
+
+#pragma warning restore CS1998
 	}
 }

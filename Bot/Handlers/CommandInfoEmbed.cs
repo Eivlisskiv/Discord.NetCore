@@ -1,7 +1,4 @@
-﻿using Discord;
-using Discord.Commands;
-using System;
-using System.Linq;
+﻿using Discord.Commands;
 using EmbedEx = Discord.Bot.Handlers.DiscordEx.EmbedEx;
 
 namespace Discord.Bot.Handlers
@@ -12,15 +9,15 @@ namespace Discord.Bot.Handlers
 
 		public Embed Embed => embed.Build();
 
-		readonly EmbedBuilder embed;
+		private readonly EmbedBuilder embed;
 
-		public CommandInfoEmbed(CommandInfo ci, string prefix, bool isShort = false)
+		public CommandInfoEmbed(CommandInfo ci, string prefix, bool isShort = false, Color? color = null)
 		{
 			command = ci;
 
 			embed = EmbedEx.BuildEmbed(command.Name + " Command Help",
 				$"**Syntax:** `{prefix}{command.Name} {(command.Parameters.Count > 0 ? $"{{{string.Join("} {", command.Parameters.Select(p => p.Name))}}}" : null)}`" + Environment.NewLine +
-				command.Summary, "use the Help command for more help", Color.DarkRed);
+				command.Summary, "use the Help command for more help", color ?? Color.Default);
 
 			if (!isShort)
 			{
@@ -34,7 +31,7 @@ namespace Discord.Bot.Handlers
 			}
 		}
 
-		string ParamToField(ParameterInfo param)
+		private string ParamToField(ParameterInfo param)
 		{
 			return $"{{{param.Name}}} `{GetTypeName(param)}`" + Environment.NewLine +
 				$"`Optional? {(param.IsOptional ? $"Yes - Default: {param.DefaultValue}" : "No")}`" + Environment.NewLine +

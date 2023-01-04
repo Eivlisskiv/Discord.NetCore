@@ -14,10 +14,10 @@ namespace Discord.Bot
 		Task OnLeftGuild(SocketGuild guildLeft);
 
 		Task OnReactionAdded(Cacheable<IUserMessage, ulong> message,
-			Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
+			Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction);
 
 		Task OnReactionRemoved(Cacheable<IUserMessage, ulong> message,
-			Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
+			Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction);
 
 		Task OnDisconnected(Exception exception);
 

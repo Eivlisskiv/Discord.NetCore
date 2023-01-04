@@ -6,7 +6,7 @@ namespace Discord.Bot.Handlers
 	{
 		public static class EmbedEx
 		{
-			public static EmbedBuilder BuildEmbed(string title, string desc = null, string footer = null,
+			public static EmbedBuilder BuildEmbed(string title, string? desc = null, string? footer = null,
 				Color color = default, params EmbedFieldBuilder[] fields)
 			{
 				EmbedBuilder embed = new();
@@ -25,8 +25,8 @@ namespace Discord.Bot.Handlers
 				return embed;
 			}
 
-			public static EmbedBuilder BuildEmbed(string title, string desc = null, string footer = null,
-				Color color = default, IEnumerable<EmbedField> fields = null)
+			public static EmbedBuilder BuildEmbed(string title, string? desc = null, string? footer = null,
+				Color color = default, IEnumerable<EmbedField>? fields = null)
 			{
 				EmbedBuilder embed = new();
 				embed.WithTitle(title);

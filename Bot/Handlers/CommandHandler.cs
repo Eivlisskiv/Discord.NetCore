@@ -1,25 +1,29 @@
-﻿using Discord;
-using Discord.Commands;
+﻿using Discord.Commands;
 using Discord.WebSocket;
-using System;
 using System.Reflection;
-using System.Threading.Tasks;
 using System.Collections;
-using Discord.Bot.Logger;
 using CommandContext = Discord.Bot.Handlers.CommandContext;
 using Discord.Bot.Handlers;
+using IResult = Discord.Commands.IResult;
+using ILogger = Discord.Bot.Logger.ILogger;
+using Discord.Net;
+using Discord.Bot.Exceptions;
+using System.Text.RegularExpressions;
+using System.Text;
+using Discord.Utils;
+using Discord.Utils.Messages;
 
 namespace Discord.Bot.Handler
 {
 	public class CommandHandler
 	{
 		public static Bot Bot => Bot.Instance;
-		public static ILogger Log;
+		private static ILogger? Log => Bot?.Log;
 
 		public static readonly Hashtable running = new();
 
 		private static CommandHandler _instance;
-		internal static CommandService CommandService => _instance._command;
+		public static CommandService CommandService => _instance.service;
 
 		public static bool RunUser(ulong id)
 		{
@@ -28,14 +32,45 @@ namespace Discord.Bot.Handler
 				running.Add(id, DateTime.UtcNow);
 				return true;
 			}
-			else if (((DateTime)running[id]).AddMinutes(2) < DateTime.UtcNow)
+
+			DateTime dateTime = (DateTime)running[id]!;
+			if (dateTime.AddMinutes(2) < DateTime.UtcNow)
 			{
 				running[id] = DateTime.UtcNow;
 				return true;
 			}
-
-			Log.LogS($"Waiting for command execution to end for {id}");
+			
 			return false;
+		}
+
+		private static bool MessageIsApproved(SocketUserMessage msg, string prefix, out int argPosition)
+		{
+			argPosition = 0;
+
+			string content = msg.Content;
+
+			if (string.IsNullOrEmpty(content)) return false;
+
+			string mentionRegex = $"<@!?{Bot.ClientUserId}>";
+			Regex mention = new(mentionRegex);
+			
+			Match? match = mention.Match(content, 0, Math.Min(content.Length, mentionRegex.Length - 1));
+			
+			if (match.Success) 
+			{
+				argPosition = match.Value.Length;
+				return true;
+			}
+
+			if (content.StartsWith(prefix)) 
+				argPosition = prefix.Length;
+			else if(msg.Channel is IDMChannel)
+				argPosition = 0;
+			else return false;
+
+			return prefix is not ("~" or "|" or "*" or "_" or "`")
+				|| !content.StartsWith(prefix + prefix)
+				|| !content.EndsWith(prefix + prefix);
 		}
 
 		private static async Task BabResult(CommandInfo method, CommandContext context, IResult result)
@@ -44,26 +79,70 @@ namespace Discord.Bot.Handler
 
 			var exception = ((ExecuteResult)result).Exception;
 
-			if (exception is Discord.Net.HttpException httpException)
+			switch (exception)
 			{
-				switch (httpException.HttpCode)
-				{
-					case System.Net.HttpStatusCode.Forbidden:
+				case HttpException httpException:
+					await HandleHttpException(context, httpException);
+					break;
+
+				case ReplyException replyException:
+					await replyException.Send(context.Channel);
+					break;
+
+				default:
+					StringBuilder builder = new();
+
+					builder.Append(exception.Message, DiscordDecorationType.Highlight);
+					string? stackTrace = exception.StackTrace;
+
+					if (stackTrace == null)
+					{
+						await context.Channel.SendMessageAsync(builder.ToString());
+						return;
+					}
+
+					if (context.User.Id == Bot.OwnerId)
+					{
+						int maxLength = 1800 - builder.Length;
+						if (stackTrace.Length > maxLength)
+						{
+							stackTrace = stackTrace[..maxLength] + 
+								$"\n[...{stackTrace.Length - maxLength}chars]";
+						}
+
+						builder.Append(stackTrace, DiscordDecorationType.Block);
+					}
+					else
+					{
+						int end = stackTrace.IndexOf('\n');
+
+						if (end > -1 && end < 1800)
+							builder.Append(stackTrace[..end], DiscordDecorationType.Block);
+					}
+
+					await context.Channel.SendMessageAsync(exception.Message);
+					break;
+			}
+		}
+
+		private static async Task HandleHttpException(CommandContext context, HttpException httpException)
+		{
+			switch (httpException.HttpCode)
+			{
+				case System.Net.HttpStatusCode.Forbidden:
 					{
 						await context.PermissionError(context, httpException);
 					}
 					break;
-					case System.Net.HttpStatusCode.BadRequest:
+				case System.Net.HttpStatusCode.BadRequest:
 					{
-						await Log.DiscordException(httpException);
+						if (Log != null)
+							await Log.DiscordException(httpException);
 					}
 					break;
-					default:
-						await context.Channel.SendMessageAsync(httpException.ToString());
-						break;
-				}
-
-				return;
+				default:
+					await context.Channel.SendMessageAsync(httpException.ToString());
+					break;
 			}
 		}
 
@@ -83,111 +162,87 @@ namespace Discord.Bot.Handler
 				return true;
 				default:
 					await context.Channel.SendMessageAsync($"Something went wrong. `{result.ErrorReason}`");
-					Log.LogS(result.ErrorReason);
+					Log?.Log(result.ErrorReason);
 					return true;
 			}
 		}
 
-		private DiscordSocketClient _client;
-		private CommandService _command;
+		private DiscordSocketClient client;
+		private CommandService service;
 
 		public CommandHandler(DiscordSocketClient client)
 		{
 			SetClient(client);
 
-			_command = new CommandService();
+			service = new CommandService(new CommandServiceConfig()
+			{
+				DefaultRunMode = RunMode.Async,
+			});
 
-			_command.AddModulesAsync(Assembly.GetEntryAssembly(), null);
+			SetupModules();
 
-			_command.CommandExecuted += OnCommandExecutedAsync;
+			//service.AddModulesAsync(typeof(IBS_Web.Discord.DiscordModules.Commands.HomebrewBuilder.System.SystemBuilder).Assembly, null);
 
+			service.CommandExecuted += OnCommandExecutedAsync;
+		}
+
+		public async void SetupModules()
+		{
+			var modules = await service.AddModulesAsync(Assembly.GetEntryAssembly(), null);
 		}
 
 		public void SetClient(DiscordSocketClient client)
 		{
-			_client = client;
+			this.client = client;
 
-			_client.MessageReceived += HandleCommandAsync;
+			this.client.MessageReceived += HandleCommandAsync;
 
 			_instance = this;
 		}
 
-		private bool MessageIsApproved(SocketUserMessage msg, string prefix, out int argPosition)
-		{
-			argPosition = 0;
-			if (msg.HasStringPrefix($"<@!{_client.CurrentUser.Id}> ", ref argPosition))
-				return true;
-
-			if (msg.Channel is not IGuildChannel gc && msg.HasStringPrefix(Bot.DefaultPrefix, ref argPosition))
-				return true;
-
-			switch (prefix)
-			{
-				case "~":
-				case "|":
-				case "*":
-				case "_":
-				case "`":
-				{
-					string content = msg.Content;
-					if (content.StartsWith(prefix + prefix) && content.EndsWith(prefix + prefix))
-						return false;
-					else if (msg.HasStringPrefix(prefix, ref argPosition))
-						return true;
-				}
-				break;
-				default:
-					if (msg.HasStringPrefix(prefix, ref argPosition))
-						return true;
-					break;
-			}
-
-			return false;
-		}
-
-		private async Task HandleCommandAsync(SocketMessage s)
+		private async Task HandleCommandAsync(SocketMessage socketMessage)
 		{
 			if (Bot.CurrentState == Bot.ActiveState.Booting ||
 				Bot.CurrentState == Bot.ActiveState.Exiting || 
-				s.Author.IsBot) return;
+				socketMessage.Author.IsBot) return;
 
-			if (s is not SocketUserMessage msg) return;
+			if (socketMessage is not SocketUserMessage userMessage) return;
 
-			CommandContext context = new(_client, msg);
+			CommandContext context = Bot.ContextBuilder(client, userMessage);
 
 			if (!context.AcceptCommand) return;
 
-			if (!MessageIsApproved(msg, context.Prefix, out int argPosition)) return;
+			if (!MessageIsApproved(userMessage, context.Prefix, out int argPosition)) 
+				return;
 
 			switch (Bot.CurrentState)
 			{
 				case Bot.ActiveState.Paused:
-					if (s.Author.Id != Bot.OwnerId)
+					if (socketMessage.Author.Id != Bot.OwnerId)
 					{
 						await context.Channel.SendMessageAsync(
 							"Server under maintenance, please refer to the support server for more information.");
 						return;
 					}
 					break;
-				case Bot.ActiveState.Ready: break;
 				case Bot.ActiveState.Updating:
 					await context.Channel.SendMessageAsync("Leaving for tea break soon. [Incoming Update]");
 					break;
 			}
 
-			if (!RunUser(s.Author.Id)) return;
+			if (!RunUser(socketMessage.Author.Id)) return;
 
-			context.BeforeCommandExecute();
+			await context.BeforeCommandExecute();
 
 			_ = Task.Run(async () =>
 			{
 				try
 				{
-					await _command.ExecuteAsync(context, argPosition, null);
+					await service.ExecuteAsync(context, argPosition, null);
 				}
 				catch (Exception e)
 				{
-					Log.LogS(e);
+					Log?.Log(e);
 				}
 			});
 		}
@@ -195,6 +250,8 @@ namespace Discord.Bot.Handler
 		public async Task OnCommandExecutedAsync(Optional<CommandInfo> commandInfo, 
 			ICommandContext ctx, IResult result)
 		{
+			running.Remove(ctx.User.Id);
+
 			if (ctx is not CommandContext context) return;
 
 			if (!commandInfo.IsSpecified) return;
@@ -209,14 +266,13 @@ namespace Discord.Bot.Handler
 					return;
 				}
 
-				context.SuccessfulExecution(this, command);
+				await context.SuccessfulExecution(this, command);
 			}
 			catch (Exception e)
 			{
-				Log.LogS(e);
+				Log?.Log(e);
 			}
 
-			running.Remove(ctx.User.Id);
 		}
 	}
 }
