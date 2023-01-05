@@ -1,6 +1,10 @@
-﻿using Discord.Bot.Handler;
+﻿using Discord.Bot.Exceptions;
+using Discord.Bot.Handler;
 using Discord.Commands;
 using Discord.Net;
+using Discord.Utils;
+using Discord.Utils.Messages;
+using System.Text;
 
 namespace Discord.Bot.Handlers
 {
@@ -48,19 +52,71 @@ namespace Discord.Bot.Handlers
 			return Task.CompletedTask;
 		}
 
-		public async Task PermissionError(CommandContext context, HttpException httpException)
+		public virtual async Task FailedCommandResult(CommandInfo method, Commands.IResult result)
+		{
+			if (await CommandErrorType(method, result)) return;
+
+			var exception = ((ExecuteResult)result).Exception;
+
+			switch (exception)
+			{
+				case HttpException httpException:
+					await HandleHttpException(httpException);
+					break;
+
+				case ReplyException replyException:
+					await replyException.Send(Channel);
+					break;
+
+				default:
+					StringBuilder builder = new();
+
+					builder.Append(exception.Message, DiscordDecorationType.Highlight);
+					string? stackTrace = exception.StackTrace;
+
+					if (stackTrace == null)
+					{
+						await Channel.SendMessageAsync(builder.ToString());
+						return;
+					}
+
+					if (User.Id == Bot.Instance.OwnerId)
+					{
+						int maxLength = 1800 - builder.Length;
+						if (stackTrace.Length > maxLength)
+						{
+							stackTrace = stackTrace[..maxLength] +
+								$"\n[...{stackTrace.Length - maxLength}chars]";
+						}
+
+						builder.Append(stackTrace, DiscordDecorationType.Block);
+					}
+					else
+					{
+						int end = stackTrace.IndexOf('\n');
+
+						if (end > -1 && end < 1800)
+							builder.Append(stackTrace[..end], DiscordDecorationType.Block);
+					}
+
+					await Channel.SendMessageAsync(exception.Message);
+					break;
+			}
+		}
+
+		public async Task PermissionError(HttpException httpException)
 		{
 			string? requiredPerms = null;
 
-			var client = (IGuildUser)await context.Channel.GetUserAsync(Bot.Instance.ClientUserId);
+			var client = (IGuildUser)await Channel.GetUserAsync(Bot.Instance.ClientUserId);
 
-			var chanPerms = client.GetPermissions((IGuildChannel)context.Channel);
+			var chanPerms = client.GetPermissions((IGuildChannel)Channel);
 			requiredPerms += GetMissingPermissions(chanPerms);
 
 			requiredPerms = requiredPerms == null ? " | Unknown permission missing" :
 				" | Required Permissions: " + Environment.NewLine + requiredPerms;
 
-			await context.Channel.SendMessageAsync(httpException.Reason + requiredPerms);
+			await Channel.SendMessageAsync(httpException.Reason + requiredPerms);
 		}
 
 		protected virtual string GetMissingPermissions(ChannelPermissions chanPerms)
@@ -77,6 +133,48 @@ namespace Discord.Bot.Handlers
 			if (!chanPerms.Has(ChannelPermission.UseExternalEmojis))
 				requiredPerms += "Use External Emojis" + Environment.NewLine;
 			return requiredPerms;
+		}
+
+		private async Task HandleHttpException(HttpException httpException)
+		{
+			switch (httpException.HttpCode)
+			{
+				case System.Net.HttpStatusCode.Forbidden:
+					{
+						await PermissionError(httpException);
+					}
+					break;
+				case System.Net.HttpStatusCode.BadRequest:
+					{
+						if (CommandHandler.Log != null)
+							await CommandHandler.Log.DiscordException(httpException);
+					}
+					break;
+				default:
+					await Channel.SendMessageAsync(httpException.ToString());
+					break;
+			}
+		}
+
+		private async Task<bool> CommandErrorType(CommandInfo method, Commands.IResult result)
+		{
+			switch (result.Error)
+			{
+				case CommandError.Exception: return false;
+				case CommandError.UnknownCommand:
+					//await context.Channel.SendMessageAsync("Hmm?");
+					return true;
+				case CommandError.ParseFailed:
+				case CommandError.BadArgCount:
+					await Channel.SendMessageAsync($"`{result.ErrorReason}` {Environment.NewLine}" +
+						$"Type `{Prefix}chelp {method.Name}` for more details",
+						embed: new CommandInfoEmbed(method, Prefix, true).Embed);
+					return true;
+				default:
+					await Channel.SendMessageAsync($"Something went wrong. `{result.ErrorReason}`");
+					CommandHandler.Log?.Log(result.ErrorReason);
+					return true;
+			}
 		}
 	}
 }

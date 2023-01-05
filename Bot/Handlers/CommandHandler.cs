@@ -18,7 +18,7 @@ namespace Discord.Bot.Handler
 	public class CommandHandler
 	{
 		public static Bot Bot => Bot.Instance;
-		private static ILogger? Log => Bot?.Log;
+		public static ILogger? Log => Bot?.Log;
 
 		public static readonly Hashtable running = new();
 
@@ -41,130 +41,6 @@ namespace Discord.Bot.Handler
 			}
 			
 			return false;
-		}
-
-		private static bool MessageIsApproved(SocketUserMessage msg, string prefix, out int argPosition)
-		{
-			argPosition = 0;
-
-			string content = msg.Content;
-
-			if (string.IsNullOrEmpty(content)) return false;
-
-			string mentionRegex = $"<@!?{Bot.ClientUserId}>";
-			Regex mention = new(mentionRegex);
-			
-			Match? match = mention.Match(content, 0, Math.Min(content.Length, mentionRegex.Length - 1));
-			
-			if (match.Success) 
-			{
-				argPosition = match.Value.Length;
-				return true;
-			}
-
-			if (content.StartsWith(prefix)) 
-				argPosition = prefix.Length;
-			else if(msg.Channel is IDMChannel)
-				argPosition = 0;
-			else return false;
-
-			return prefix is not ("~" or "|" or "*" or "_" or "`")
-				|| !content.StartsWith(prefix + prefix)
-				|| !content.EndsWith(prefix + prefix);
-		}
-
-		private static async Task BabResult(CommandInfo method, CommandContext context, IResult result)
-		{
-			if (await CommandErrorType(method, context, result)) return;
-
-			var exception = ((ExecuteResult)result).Exception;
-
-			switch (exception)
-			{
-				case HttpException httpException:
-					await HandleHttpException(context, httpException);
-					break;
-
-				case ReplyException replyException:
-					await replyException.Send(context.Channel);
-					break;
-
-				default:
-					StringBuilder builder = new();
-
-					builder.Append(exception.Message, DiscordDecorationType.Highlight);
-					string? stackTrace = exception.StackTrace;
-
-					if (stackTrace == null)
-					{
-						await context.Channel.SendMessageAsync(builder.ToString());
-						return;
-					}
-
-					if (context.User.Id == Bot.OwnerId)
-					{
-						int maxLength = 1800 - builder.Length;
-						if (stackTrace.Length > maxLength)
-						{
-							stackTrace = stackTrace[..maxLength] + 
-								$"\n[...{stackTrace.Length - maxLength}chars]";
-						}
-
-						builder.Append(stackTrace, DiscordDecorationType.Block);
-					}
-					else
-					{
-						int end = stackTrace.IndexOf('\n');
-
-						if (end > -1 && end < 1800)
-							builder.Append(stackTrace[..end], DiscordDecorationType.Block);
-					}
-
-					await context.Channel.SendMessageAsync(exception.Message);
-					break;
-			}
-		}
-
-		private static async Task HandleHttpException(CommandContext context, HttpException httpException)
-		{
-			switch (httpException.HttpCode)
-			{
-				case System.Net.HttpStatusCode.Forbidden:
-					{
-						await context.PermissionError(context, httpException);
-					}
-					break;
-				case System.Net.HttpStatusCode.BadRequest:
-					{
-						if (Log != null)
-							await Log.DiscordException(httpException);
-					}
-					break;
-				default:
-					await context.Channel.SendMessageAsync(httpException.ToString());
-					break;
-			}
-		}
-
-		private static async Task<bool> CommandErrorType(CommandInfo method, CommandContext context, IResult result)
-		{
-			switch (result.Error)
-			{
-				case CommandError.Exception: return false;
-				case CommandError.UnknownCommand: 
-					//await context.Channel.SendMessageAsync("Hmm?");
-					return true;
-				case CommandError.ParseFailed:
-				case CommandError.BadArgCount:
-					await context.Channel.SendMessageAsync($"`{result.ErrorReason}` {Environment.NewLine}" +
-						$"Type `{context.Prefix}chelp {method.Name}` for more details",
-						embed: new CommandInfoEmbed(method, context.Prefix, true).Embed);
-				return true;
-				default:
-					await context.Channel.SendMessageAsync($"Something went wrong. `{result.ErrorReason}`");
-					Log?.Log(result.ErrorReason);
-					return true;
-			}
 		}
 
 		private DiscordSocketClient client;
@@ -208,11 +84,13 @@ namespace Discord.Bot.Handler
 
 			if (socketMessage is not SocketUserMessage userMessage) return;
 
-			CommandContext context = Bot.ContextBuilder(client, userMessage);
+			CommandContext context = Bot.CreateCommandContext(client, userMessage);
 
 			if (!context.AcceptCommand) return;
 
-			if (!MessageIsApproved(userMessage, context.Prefix, out int argPosition)) 
+			ValidationResult basicValidation = new(userMessage, context.Prefix);
+
+			if (!Bot.IsMessageCommand(basicValidation, out int argPosition)) 
 				return;
 
 			switch (Bot.CurrentState)
@@ -262,7 +140,7 @@ namespace Discord.Bot.Handler
 			{
 				if (!result.IsSuccess)
 				{
-					await BabResult(command, context, result);
+					await context.FailedCommandResult(command, result);
 					return;
 				}
 

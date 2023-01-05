@@ -11,17 +11,6 @@ namespace Discord.Bot
 	{
 		public static Bot Instance { get; private set; }
 
-		public static Func<IDiscordClient, IUserMessage, CommandContext> ContextBuilder
-		{
-			get => _contextBuilder;
-			set => _contextBuilder = value ?? defaultContextBuilder;
-		}
-
-		private static Func<IDiscordClient, IUserMessage, CommandContext> _contextBuilder = defaultContextBuilder!;
-
-		private static readonly Func<IDiscordClient, IUserMessage, CommandContext> defaultContextBuilder
-			= (client, message) => new CommandContext(client, message);
-
 		public virtual ILogger Log { get; } = new DiscordLogger();
 
 		public enum ActiveState
@@ -91,6 +80,9 @@ namespace Discord.Bot
 			else commandHandler.SetClient(Client);
 		}
 
+		public virtual CommandContext CreateCommandContext(IDiscordClient client, IUserMessage message) 
+			=> new CommandContext(client, message);
+
 		public virtual async Task OnDisconnected(Exception arg) 
 		{
 		
@@ -121,6 +113,11 @@ namespace Discord.Bot
 			Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
 		{
 
+		}
+
+		public virtual bool IsMessageCommand(ValidationResult baseValidationResult, out int argPosition)
+		{
+			return baseValidationResult.Validate(out argPosition);
 		}
 
 #pragma warning restore CS1998
