@@ -32,7 +32,7 @@ namespace Discord.Utils.Emotes
 			CachedUser = GetCachedUser();
 		}
 
-		private IMessageChannel GetCachedChannel()
+		private IMessageChannel? GetCachedChannel()
 		{
 			if (CachedMessage is not null)
 				return CachedMessage.Channel;
