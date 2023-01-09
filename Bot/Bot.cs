@@ -1,7 +1,11 @@
-﻿using Discord.Bot.Handler;
+﻿using Discord.Bot.Exceptions;
+using Discord.Bot.Handler;
 using Discord.Bot.Handlers;
 using Discord.Bot.Logger;
+using Discord.Net;
 using Discord.Rest;
+using Discord.Utils.Emotes;
+using Discord.Utils.Extensions;
 using Discord.WebSocket;
 using ILogger = Discord.Bot.Logger.ILogger;
 
@@ -62,7 +66,6 @@ namespace Discord.Bot
 			await Task.Delay(-1);
 		}
 
-#pragma warning disable CS1998
 		public virtual async Task Ready()
 		{
 			CurrentState = ActiveState.Ready;
@@ -83,43 +86,127 @@ namespace Discord.Bot
 		public virtual CommandContext CreateCommandContext(IDiscordClient client, IUserMessage message) 
 			=> new CommandContext(client, message);
 
-		public virtual async Task OnDisconnected(Exception arg) 
+		public virtual Task OnDisconnected(Exception arg) 
 		{
-		
+			return Task.CompletedTask;
 		}
 
-		public virtual async Task LogAsync(LogMessage message) 
+		public virtual Task LogAsync(LogMessage message) 
 		{
-		
+			return Task.CompletedTask;
 		}
 
-		public virtual async Task OnJoinedGuild(SocketGuild guildJoined) 
+		public virtual Task OnJoinedGuild(SocketGuild guildJoined) 
 		{
-		
+			return Task.CompletedTask;
 		}
 
-		public virtual async Task OnLeftGuild(SocketGuild guildLeft) 
+		public virtual Task OnLeftGuild(SocketGuild guildLeft) 
 		{
-		
+			return Task.CompletedTask;
 		}
 
-		public virtual async Task OnReactionAdded(Cacheable<IUserMessage, ulong> message,
+		public Task OnReactionAdded(Cacheable<IUserMessage, ulong> message,
 			Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
 		{
+			if (reaction.UserId == ClientUserId) return Task.CompletedTask;
 
+			return OnReactionAdded(new ReactionInfo(reaction, message, channel));
 		}
 
-		public virtual async Task OnReactionRemoved(Cacheable<IUserMessage, ulong> message,
+		protected virtual Task OnReactionAdded(ReactionInfo reaction)
+			=> Task.CompletedTask;
+
+		public virtual Task OnReactionRemoved(Cacheable<IUserMessage, ulong> message,
 			Cacheable<IMessageChannel, ulong> channel, SocketReaction reaction)
 		{
+			if (reaction.UserId == ClientUserId) return Task.CompletedTask;
 
+			return OnReactionRemoved(new ReactionInfo(reaction, message, channel));
 		}
+
+		protected virtual Task OnReactionRemoved(ReactionInfo reaction)
+			=> Task.CompletedTask;
 
 		public virtual bool IsMessageCommand(ValidationResult baseValidationResult, out int argPosition)
 		{
 			return baseValidationResult.Validate(out argPosition);
 		}
 
-#pragma warning restore CS1998
+		public async Task HandleException(Exception exception, IMessageChannel channel, IUser user)
+		{
+			switch (exception)
+			{
+				case HttpException httpException:
+					await HandleHttpException(httpException, channel);
+					break;
+
+				case ReplyException replyException:
+					await replyException.Send(channel);
+					break;
+
+				default:
+					await HandleUnknownException(exception, channel, user);
+					break;
+			}
+		}
+
+		protected virtual async Task HandleUnknownException(Exception exception, IMessageChannel channel, IUser user)
+		{
+			await channel.SendMessageAsync(exception.Message);
+
+			if (user.Id != OwnerId) return;
+
+			if (exception.StackTrace is not null)
+				await channel.SendAsFileAsync(exception.StackTrace);
+		}
+
+		private async Task HandleHttpException(HttpException httpException, IMessageChannel channel)
+		{
+			switch (httpException.HttpCode)
+			{
+				case System.Net.HttpStatusCode.Forbidden:
+						await PermissionError(httpException, channel);
+					break;
+				case System.Net.HttpStatusCode.BadRequest:
+					if (CommandHandler.Log != null)
+						await CommandHandler.Log.DiscordException(httpException);
+					break;
+				default:
+					await channel.SendMessageAsync(httpException.ToString());
+					break;
+			}
+		}
+
+		private async Task PermissionError(HttpException httpException, IMessageChannel channel)
+		{
+			string? requiredPerms = null;
+
+			IGuildUser client = (IGuildUser)Client;
+
+			var chanPerms = client.GetPermissions((IGuildChannel)channel);
+			requiredPerms += GetMissingPermissions(chanPerms);
+
+			requiredPerms = requiredPerms == null ? " | Unknown permission missing" :
+				" | Required Permissions: " + Environment.NewLine + requiredPerms;
+
+			await channel.SendMessageAsync(httpException.Reason + requiredPerms);
+		}
+
+		protected virtual string GetMissingPermissions(ChannelPermissions chanPerms)
+		{
+			string requiredPerms = null!;
+			if (!chanPerms.Has(ChannelPermission.EmbedLinks))
+				requiredPerms += "Embed Links" + Environment.NewLine;
+			if (!chanPerms.Has(ChannelPermission.AddReactions))
+				requiredPerms += "Add Reactions" + Environment.NewLine;
+			if (!chanPerms.Has(ChannelPermission.ReadMessageHistory))
+				requiredPerms += "Read Message History" + Environment.NewLine;
+			if (!chanPerms.Has(ChannelPermission.AttachFiles))
+				requiredPerms += "Attach Files" + Environment.NewLine;
+			if (!chanPerms.Has(ChannelPermission.UseExternalEmojis))
+				requiredPerms += "Use External Emojis" + Environment.NewLine;
+			return requiredPerms;
+		}
 	}
 }

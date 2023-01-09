@@ -13,7 +13,7 @@
 		private Embed[] Embeds { get; init; }
 		private MessageFlags MessageFlags { get; init; }
 
-		public ReplyException(string replyMessage)
+		public ReplyException(string replyMessage) : base(replyMessage)
 		{
 			ReplyMessage = replyMessage;
 		}

@@ -2,22 +2,21 @@
 {
 	public interface IEmbedConvertible
 	{
-		EmbedBuilder ToEmbed();
+		EmbedBuilder ToEmbed(EmbedBuilder? embed);
 	}
 
 	public static class EmbedConvertibleEx
 	{
-		public static EmbedBuilder ToEmbed<T>(this T obj)
+		public static EmbedBuilder ToEmbed<T>(this T obj, EmbedBuilder? embed = null)
 		{
-			if(obj is IEmbedConvertible embedConvertible) return embedConvertible.ToEmbed();
+			if(obj is IEmbedConvertible embedConvertible) 
+				return embedConvertible.ToEmbed(embed ?? new());
 
-			return DefaultEmbedConversion(obj);
+			return DefaultEmbedConversion(obj, embed ?? new());
 		}
 
-		private static EmbedBuilder DefaultEmbedConversion<T>(T obj)
+		private static EmbedBuilder DefaultEmbedConversion<T>(T obj, EmbedBuilder embed)
 		{
-			EmbedBuilder embed = new EmbedBuilder();
-
 			return embed;
 		}
 	}
