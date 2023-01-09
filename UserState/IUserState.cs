@@ -115,6 +115,7 @@ namespace Discord.UserState
 			await message.ModifyAsync(mp =>
 			{
 				mp.Embed = embed.Build();
+				mp.Content = text;
 			});
 
 			IEnumerable<IEmote> reactions = await UserStateMethods.GetEmotes(this);
