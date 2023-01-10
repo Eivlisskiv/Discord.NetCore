@@ -1,11 +1,5 @@
-﻿using Discord.Bot.Exceptions;
-using Discord.Bot.Handler;
+﻿using Discord.Bot.Handler;
 using Discord.Commands;
-using Discord.Net;
-using Discord.Utils;
-using Discord.Utils.Extensions;
-using Discord.Utils.Messages;
-using System.Text;
 
 namespace Discord.Bot.Handlers
 {
@@ -69,7 +63,7 @@ namespace Discord.Bot.Handlers
 			{
 				case CommandError.Exception: return false;
 				case CommandError.UnknownCommand:
-					//await context.Channel.SendMessageAsync("Hmm?");
+					await UnknownCommand();
 					return true;
 				case CommandError.ParseFailed:
 				case CommandError.BadArgCount:
@@ -82,6 +76,11 @@ namespace Discord.Bot.Handlers
 					CommandHandler.Log?.Log(result.ErrorReason);
 					return true;
 			}
+		}
+
+		public virtual Task UnknownCommand()
+		{
+			return Task.CompletedTask;
 		}
 	}
 }

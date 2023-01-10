@@ -7,6 +7,13 @@ namespace Discord.UserState
 	{
 		protected class UserStateMethods
 		{
+			public enum Result
+			{
+				NotFound,
+				Success,
+				Failed
+			}
+
 			private const BindingFlags flags =
 					BindingFlags.Public | BindingFlags.NonPublic |
 					BindingFlags.InvokeMethod |
@@ -174,13 +181,11 @@ namespace Discord.UserState
 				emotesValues[stateType] = emotesList.ToArray();
 			}
 
-			public static async Task<bool> Verify(IUserState state, string key)
+			public static async Task<Result> Verify(IUserState state, string key)
 			{
 				IMethodsContainer container = Get<UserStateVerificationMethods>(state.GetType());
 
-				if (container is null) return false;
-
-				if (!container.TryGet(key, out MethodInfo method)) return true;
+				if (!container.TryGet(key, out MethodInfo method)) return Result.NotFound;
 
 				object? result = method.Invoke(method.IsStatic ? null : state, null);
 
@@ -191,22 +196,23 @@ namespace Discord.UserState
 					bool success => success,
 
 					_ => false
-				};
+				} ? Result.Success : Result.Failed;
 			}
 
-			public static async Task<bool> Invoke(IUserState state, string key)
+			public static async Task<Result> Invoke(IUserState state, string key)
 			{
-				if (!await Verify(state, key)) return false;
-
 				IMethodsContainer container = Get<UserStateInvocationMethods>(state.GetType());
 
-				if (container is null || !container.TryGet(key, out MethodInfo method)) return false;
+				if (container is null || !container.TryGet(key, out MethodInfo method))
+					return Result.NotFound;
+
+				if (await Verify(state, key) == Result.Failed) return Result.Failed;
 
 				object? result = method.Invoke(method.IsStatic ? null : state, null);
 
 				if (result is Task task) await task;
 
-				return true;
+				return Result.Success;
 			}
 
 			public static async Task<IEnumerable<IEmote>> GetEmotes(IUserState state)
@@ -227,7 +233,7 @@ namespace Discord.UserState
 
 					if (string.IsNullOrEmpty(str)) continue;
 
-					if (!await Verify(state, str)) continue;
+					if (await Verify(state, str) == Result.Failed) continue;
 
 					if (Emote.TryParse(str, out Emote emote))
 						results.Add(emote);

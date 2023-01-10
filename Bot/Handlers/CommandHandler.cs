@@ -90,8 +90,11 @@ namespace Discord.Bot.Handler
 
 			ValidationResult basicValidation = new(userMessage, context.Prefix);
 
-			if (!Bot.IsMessageCommand(basicValidation, out int argPosition)) 
+			if (!Bot.IsMessageCommand(basicValidation, out int argPosition))
+			{
+				UnregistedContent(context);
 				return;
+			}
 
 			switch (Bot.CurrentState)
 			{
@@ -112,17 +115,31 @@ namespace Discord.Bot.Handler
 
 			await context.BeforeCommandExecute();
 
-			_ = Task.Run(async () =>
+			StartCommand(context, argPosition);
+		}
+
+		private async void StartCommand(CommandContext context, int argPosition)
+		{
+			try
 			{
-				try
-				{
-					await service.ExecuteAsync(context, argPosition, null);
-				}
-				catch (Exception e)
-				{
-					Log?.Log(e);
-				}
-			});
+				await service.ExecuteAsync(context, argPosition, null);
+			}
+			catch (Exception e)
+			{
+				Log?.Log(e);
+			}
+		}
+
+		private async void UnregistedContent(CommandContext context)
+		{
+			try
+			{
+				await context.UnknownCommand();
+			}
+			catch (Exception e)
+			{
+				Log?.Log(e);
+			}
 		}
 
 		public async Task OnCommandExecutedAsync(Optional<CommandInfo> commandInfo, 

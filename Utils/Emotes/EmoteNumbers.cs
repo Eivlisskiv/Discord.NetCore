@@ -5,6 +5,7 @@ namespace Discord.Utils.Emotes
 	public static partial class Emotes 
 	{
 		public const char Negative = '➖';
+		public const char Positive = '➕';
 
 		private const string NumberFormat = "\\u003{0}\\u20e3";
 
