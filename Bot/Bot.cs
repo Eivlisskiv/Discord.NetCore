@@ -7,6 +7,7 @@ using Discord.Rest;
 using Discord.Utils.Emotes;
 using Discord.Utils.Extensions;
 using Discord.WebSocket;
+using System.Reflection;
 using ILogger = Discord.Bot.Logger.ILogger;
 
 namespace Discord.Bot
@@ -61,9 +62,7 @@ namespace Discord.Bot
 			await Client.LoginAsync(TokenType.Bot, token);
 			await Client.StartAsync();
 
-			SetCommandHandler();
-
-			await Task.Delay(-1);
+			await SetCommandHandler();
 		}
 
 		public virtual async Task Ready()
@@ -76,11 +75,21 @@ namespace Discord.Bot
 			OwnerId = info.Owner.Id;
 		}
 
-		private void SetCommandHandler()
+		private async Task SetCommandHandler()
 		{
 			if (commandHandler == null)
+			{
 				commandHandler = new CommandHandler(Client);
-			else commandHandler.SetClient(Client);
+				await SetUpCommandService(commandHandler.service);
+			}
+			else
+			{
+				commandHandler.SetClient(Client);
+			}
+		}
+		protected virtual async Task SetUpCommandService(Commands.CommandService service)
+		{
+			await service.AddModulesAsync(GetType().Assembly, null);
 		}
 
 		public virtual CommandContext CreateCommandContext(IDiscordClient client, IUserMessage message) 

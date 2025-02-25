@@ -9,11 +9,8 @@ namespace Discord.Bot.CoreCommands.HelpCommands
 		//Have modules
 
 		#region Modules
-
 		public static IEnumerable<ModuleInfo> Modules => Service.Modules;
-
 		public static readonly string[] ModuleNames = Modules.Select(m => m.Name).OrderBy(n => n).ToArray();
-
 		#endregion
 
 		//Display modules list
@@ -26,7 +23,5 @@ namespace Discord.Bot.CoreCommands.HelpCommands
 
 		//Display command
 		//Module name + command info
-
-
 	}
 }

@@ -18,7 +18,7 @@ namespace Discord.Bot.Handler
 	public class CommandHandler
 	{
 		public static Bot Bot => Bot.Instance;
-		public static ILogger? Log => Bot?.Log;
+		public static ILogger Log => Bot?.Log;
 
 		public static readonly Hashtable running = new();
 
@@ -43,8 +43,8 @@ namespace Discord.Bot.Handler
 			return false;
 		}
 
+		public readonly CommandService service;
 		private DiscordSocketClient client;
-		private CommandService service;
 
 		public CommandHandler(DiscordSocketClient client)
 		{
@@ -55,24 +55,13 @@ namespace Discord.Bot.Handler
 				DefaultRunMode = RunMode.Async,
 			});
 
-			SetupModules();
-
-			//service.AddModulesAsync(typeof(IBS_Web.Discord.DiscordModules.Commands.HomebrewBuilder.System.SystemBuilder).Assembly, null);
-
 			service.CommandExecuted += OnCommandExecutedAsync;
-		}
-
-		public async void SetupModules()
-		{
-			var modules = await service.AddModulesAsync(Assembly.GetEntryAssembly(), null);
 		}
 
 		public void SetClient(DiscordSocketClient client)
 		{
 			this.client = client;
-
 			this.client.MessageReceived += HandleCommandAsync;
-
 			_instance = this;
 		}
 
@@ -92,7 +81,7 @@ namespace Discord.Bot.Handler
 
 			if (!Bot.IsMessageCommand(basicValidation, out int argPosition))
 			{
-				UnregistedContent(context);
+				UnregistereddContent(context);
 				return;
 			}
 
@@ -130,7 +119,7 @@ namespace Discord.Bot.Handler
 			}
 		}
 
-		private async void UnregistedContent(CommandContext context)
+		private async void UnregistereddContent(CommandContext context)
 		{
 			try
 			{

@@ -1,6 +1,4 @@
-﻿using Discord;
-using Discord.Bot.CoreCommands.HelpCommands;
-using Discord.Bot.Handlers;
+﻿using Discord.Bot.Handlers;
 using Discord.Commands;
 using Utilities.Extensions;
 using static Discord.Bot.Handlers.DiscordEx;
@@ -12,7 +10,7 @@ namespace Discord.Bot.CoreCommands.HelpCommands
 	{
 		[Command("Modules")]
 		[Alias("Module", "Groups")]
-		public async Task Help2(string? moduleName = null, [Remainder] string? commandName = null)
+		public async Task Help2(string moduleName = null, [Remainder] string commandName = null)
 		{
 			if (moduleName == null)
 			{
@@ -30,7 +28,7 @@ namespace Discord.Bot.CoreCommands.HelpCommands
 				return;
 			}
 
-			ModuleInfo? module = HelpHandler.Modules.First(
+			ModuleInfo module = HelpHandler.Modules.First(
 				m => m.Name.Equals(moduleName, StringComparison.OrdinalIgnoreCase));
 
 			if (module == null)
@@ -64,7 +62,7 @@ namespace Discord.Bot.CoreCommands.HelpCommands
 			
 		}
 
-		[Command("Command Help"), Alias("chelp")]
+		[Command("Help")]
 		public async Task CommandHelp([Remainder] string commandName)
 		{
 			if (commandName.Length == 0) await ReplyAsync("No command name was given.");
