@@ -71,7 +71,7 @@ namespace Discord.Bot
 
 			ClientUserId = Client.CurrentUser.Id;
 
-			RestApplication? info = await Client.GetApplicationInfoAsync();
+			RestApplication info = await Client.GetApplicationInfoAsync();
 			OwnerId = info.Owner.Id;
 		}
 
