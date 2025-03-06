@@ -44,11 +44,13 @@ namespace Discord.Bot.Handler
 		}
 
 		public readonly CommandService service;
+		private readonly IServiceProvider provider;
 		private DiscordSocketClient client;
 
-		public CommandHandler(DiscordSocketClient client)
+		public CommandHandler(DiscordSocketClient client, IServiceProvider provider = null)
 		{
 			SetClient(client);
+			this.provider = provider;
 
 			service = new CommandService(new CommandServiceConfig()
 			{
@@ -111,7 +113,7 @@ namespace Discord.Bot.Handler
 		{
 			try
 			{
-				await service.ExecuteAsync(context, argPosition, null);
+				await service.ExecuteAsync(context, argPosition, provider);
 			}
 			catch (Exception e)
 			{

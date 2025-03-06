@@ -1,13 +1,14 @@
 ﻿using Discord.Bot.Exceptions;
 using Discord.Bot.Handler;
-using Discord.Bot.Handlers;
 using Discord.Bot.Logger;
+using Discord.Commands;
 using Discord.Net;
 using Discord.Rest;
 using Discord.Utils.Emotes;
 using Discord.Utils.Extensions;
 using Discord.WebSocket;
 using System.Reflection;
+using CommandContext = Discord.Bot.Handlers.CommandContext;
 using ILogger = Discord.Bot.Logger.ILogger;
 
 namespace Discord.Bot
@@ -29,15 +30,11 @@ namespace Discord.Bot
 		}
 
 		public ulong ClientUserId { get; private set; }
-
 		public ulong OwnerId { get; private set; }
-
 		public ActiveState CurrentState { get; private set; }
-
 		public string DefaultPrefix { get; set; } = "~";
 
 		public DiscordSocketClient Client { get; private set; }
-
 		private CommandHandler commandHandler;
 
 		public Bot()
@@ -57,12 +54,12 @@ namespace Discord.Bot
 			Instance = this;
 		}
 
-		public virtual async Task Start(string token)
+		public virtual async Task Start(string token, IServiceProvider provider = null)
 		{
 			await Client.LoginAsync(TokenType.Bot, token);
 			await Client.StartAsync();
 
-			await SetCommandHandler();
+			await SetCommandHandler(provider);
 		}
 
 		public virtual async Task Ready()
@@ -75,21 +72,21 @@ namespace Discord.Bot
 			OwnerId = info.Owner.Id;
 		}
 
-		private async Task SetCommandHandler()
+		private async Task SetCommandHandler(IServiceProvider provider)
 		{
 			if (commandHandler == null)
 			{
-				commandHandler = new CommandHandler(Client);
-				await SetUpCommandService(commandHandler.service);
+				commandHandler = new CommandHandler(Client, provider);
+				await SetUpCommandService(commandHandler.service, provider);
 			}
 			else
 			{
 				commandHandler.SetClient(Client);
 			}
 		}
-		protected virtual async Task SetUpCommandService(Commands.CommandService service)
+		protected virtual async Task SetUpCommandService(CommandService service, IServiceProvider provider)
 		{
-			await service.AddModulesAsync(GetType().Assembly, null);
+			await service.AddModulesAsync(GetType().Assembly, provider);
 		}
 
 		public virtual CommandContext CreateCommandContext(IDiscordClient client, IUserMessage message) 
