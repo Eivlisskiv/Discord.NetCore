@@ -37,10 +37,10 @@ namespace Discord.Bot
 		public DiscordSocketClient Client { get; private set; }
 		private CommandHandler commandHandler;
 
-		public Bot()
+		public Bot(DiscordSocketConfig config = null)
 		{
-			Client = new DiscordSocketClient();
-
+			Client = new DiscordSocketClient(config ?? new DiscordSocketConfig());
+			
 			Client.Ready += Ready;
 			Client.Log += LogAsync;
 			Client.JoinedGuild += OnJoinedGuild;
