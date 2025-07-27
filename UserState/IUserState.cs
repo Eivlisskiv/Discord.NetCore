@@ -1,5 +1,4 @@
 ﻿using Discord.Utils.Emotes;
-using Discord.WebSocket;
 
 namespace Discord.UserState
 {
@@ -77,7 +76,7 @@ namespace Discord.UserState
 			return await UserStateMethods.Invoke(this, key) is UserStateMethods.Result.Success;
 		}
 
-		public async Task SendStateMessage(IMessageChannel? channel = null)
+		public async Task SendStateMessage(IMessageChannel channel = null)
 		{
 			if (channel is null) channel = await GetChannel();
 			else SetChannel(channel);
@@ -103,7 +102,7 @@ namespace Discord.UserState
 			return Task.FromResult(false);
 		}
 
-		protected async Task UpdateOrSendStateMessage(IMessageChannel? channel = null)
+		protected async Task UpdateOrSendStateMessage(IMessageChannel channel = null)
 		{
 			if (this.message is null && MessageId == default)
 			{
@@ -192,9 +191,9 @@ namespace Discord.UserState
 			return Task.FromResult(builder);
 		}
 
-		protected virtual Task<string?> GetMessageText()
+		protected virtual Task<string> GetMessageText()
 		{
-			return Task.FromResult<string?>(null);
+			return Task.FromResult<string>(null);
 		}
 	}
 }
